@@ -1,0 +1,6 @@
+{
+    "require": {
+        "firebase/php-jwt": "^6.8",
+        "rbdwllr/reallysimplejwt": "^5.0"
+    }
+}
