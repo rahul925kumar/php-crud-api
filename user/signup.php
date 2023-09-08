@@ -1,17 +1,50 @@
 <?php
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
+header("Access-Control-Allow-Origin: *"); // Change * to your specific domain if needed
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+header("Access-Control-Allow-Headers: User-Authorization");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  header("Access-Control-Allow-Origin: *");
+  header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+  header("Access-Control-Allow-Headers: User-Authorization, Content-Type, X-Requested-With, access-control-allow-origin");
+  http_response_code(200);
+  exit;
+}
+
 require_once('../db_config.php');
 $secret = 'sec!ReT423*&';
 require '../vendor/autoload.php';
 use ReallySimpleJWT\Token;
 
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
-  if (empty($_POST['email']) || empty($_POST['name']) || empty($_POST['password'])) {
-    $data = ["error" => true, "message" => "Fill all mandatory fields"];
+
+  $expected_keys = ['name', 'email', 'password'];
+
+  $missing_keys = array_diff($expected_keys, array_keys($_POST));
+
+  if (!empty($missing_keys)) {
+    $missing_key = reset($missing_keys);
+    $data = ["error" => true, "message" => "The '$missing_key' key is missing."];
     echo json_encode($data);
     die;
   }
+
+
+  $missingKeys = [];
+  foreach ($_POST as $key => $value) {
+    if (empty($value)) {
+      $missingKeys[] = $key;
+    }
+  }
+
+  if (!empty($missingKeys)) {
+    $data = ["error" => true, "message" => "The following keys have missing values: " . implode(', ', $missingKeys)];
+    echo json_encode($data);
+    die;
+  }
+
   if (is_valid_email($_POST['email'])) {
 
     if (checkUserExists($_POST['email'])) {
@@ -23,15 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
       $result = mysqli_query($mysqli, $insert);
       $last_inserted_id = mysqli_insert_id($mysqli);
 
-
-
-      /* $payload = array(
-        "user_id" => $last_inserted_id,
-        "email" => $_POST['email'],
-        "exp" => time() + 86400,
-      );
-
-      $token = Firebase\JWT\JWT::encode($payload, $secret_key, 'HS256'); */
 
       $userId = $last_inserted_id;
       $expiration = time() + 86400;
