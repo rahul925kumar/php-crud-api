@@ -1,16 +1,44 @@
 <?php
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
+header("Access-Control-Allow-Origin: *"); // Change * to your specific domain if needed
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+header("Access-Control-Allow-Headers: User-Authorization");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  header("Access-Control-Allow-Origin: *");
+  header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+  header("Access-Control-Allow-Headers: User-Authorization, Content-Type, X-Requested-With, access-control-allow-origin");
+  http_response_code(200);
+  exit;
+}
 require_once('../db_config.php');
 $secret = 'sec!ReT423*&';
 require '../vendor/autoload.php';
-
 use ReallySimpleJWT\Token;
 
 if ($_SERVER['REQUEST_METHOD'] === "POST") {
-  if (empty($_POST['email']) || empty($_POST['password'])) {
-    $response = ["error" => true, "message" => "Fill in all mandatory fields"];
-    echo json_encode($response);
+
+  $expected_keys = ['email', 'password'];
+
+  $missing_keys = array_diff($expected_keys, array_keys($_POST));
+
+  if (!empty($missing_keys)) {
+    $missing_key = reset($missing_keys);
+    $data = ["error" => true, "message" => "The '$missing_key' key is missing."];
+    echo json_encode($data);
+    die;
+  }
+
+  $missingKeys = [];
+  foreach ($_POST as $key => $value) {
+    if (empty($value)) {
+      $missingKeys[] = $key;
+    }
+  }
+  if (!empty($missingKeys)) {
+    $data = ["error" => true, "message" => "The following keys have missing values: " . implode(', ', $missingKeys)];
+    echo json_encode($data);
     die;
   }
 
