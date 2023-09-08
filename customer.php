@@ -1,6 +1,17 @@
 <?php
-error_reporting(E_ALL);
-ini_set("display_errors", 1);
+
+header("Access-Control-Allow-Origin: *"); // Change * to your specific domain if needed
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+header("Access-Control-Allow-Headers: User-Authorization");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  header("Access-Control-Allow-Origin: *");
+  header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+  header("Access-Control-Allow-Headers: User-Authorization, Content-Type, X-Requested-With, access-control-allow-origin");
+  http_response_code(200);
+  exit;
+}
+
 require_once('db_config.php');
 $secret = 'sec!ReT423*&';
 require 'vendor/autoload.php';
@@ -12,6 +23,29 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
   $auth_check = userAuthentication($headers, $secret);
   if ($auth_check) {
     $user_id = $auth_check['user_id'];
+    $expected_keys = ['first_name', 'last_name', 'email', 'phone', 'city', 'country', 'pincode', 'address', 'gender', 'course'];
+    $missing_keys = array_diff($expected_keys, array_keys($_POST));
+
+    if (!empty($missing_keys)) {
+      $missing_key = reset($missing_keys);
+      $data = ["error" => true, "message" => "The '$missing_key' key is missing."];
+      echo json_encode($data);
+      die;
+    }
+
+    $missingKeys = [];
+    foreach ($_POST as $key => $value) {
+      if (empty($value)) {
+        $missingKeys[] = $key;
+      }
+    }
+    if (!empty($missingKeys)) {
+      $data = ["error" => true, "message" => "The following keys have missing values: " . implode(', ', $missingKeys)];
+      echo json_encode($data);
+      die;
+    }
+    
+
     if (
       empty($_POST['first_name']) || empty($_POST['last_name']) || empty($_POST['email']) || empty($_POST['phone']) || empty($_POST['city']) || empty($_POST['country']) || empty($_POST['pincode']) || empty($_POST['address']) || empty($_POST['gender'])
     ) {
@@ -86,6 +120,38 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
           "message" => "No record found."
         ];
       }
+    } elseif (isset($_GET['sort_by']) && !empty($_GET['sort_by'])) {
+      $keyword = $_GET['sort_by'] == 'name' ? 'first_name' : $_GET['sort_by'];
+      $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) ? intval($_GET['limit']) : 10;
+      $page = isset($_GET['page']) && is_numeric($_GET['page']) ? intval($_GET['page']) : 1;
+      $offset = ($page - 1) * $limit;
+
+      $query = "SELECT * FROM `customers` WHERE `user_id` = $user_id ORDER BY `customers`.`$keyword` ASC
+          LIMIT $limit OFFSET $offset;";
+      $result = mysqli_query($mysqli, $query);
+
+      $totalRecordsQuery = "SELECT COUNT(*) AS total FROM `customers` WHERE `user_id` = $user_id;";
+      $totalRecordsResult = mysqli_query($mysqli, $totalRecordsQuery);
+      $totalRecords = mysqli_fetch_assoc($totalRecordsResult)['total'];
+      if ($result->num_rows) {
+        $records = mysqli_fetch_all($result, MYSQLI_ASSOC);
+
+        $response = [
+          "error" => false,
+          "message" => "Success",
+          "data" => $records,
+          "pagination" => [
+            "page" => $page,
+            "limit" => $limit,
+            "total_records" => $totalRecords
+          ]
+        ];
+      } else {
+        $response = [
+          "error" => true,
+          "message" => "No record found."
+        ];
+      }
     } else {
       $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) ? intval($_GET['limit']) : 10;
       $page = isset($_GET['page']) && is_numeric($_GET['page']) ? intval($_GET['page']) : 1;
@@ -115,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     }
 
     if (isset($response)) {
+      http_response_code(200);
       echo json_encode($response);
       die;
     }
@@ -225,8 +292,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
 function userAuthentication($headers, $secret)
 {
-  if (array_key_exists('Authorization', $headers)) {
-    $token = str_replace('Bearer ', '', $headers['Authorization']);
+  if (array_key_exists('User-Authorization', $headers)) {
+    $token = str_replace('Bearer ', '', $headers['User-Authorization']);
 
     $validate = Token::validate($token, $secret);
     if ($validate) {
